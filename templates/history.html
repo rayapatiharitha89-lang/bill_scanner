@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Bill History</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 0; background: #f0f2f5; }
+        .navbar { background: #2c3e50; color: white; padding: 15px 30px; display: flex; justify-content: space-between; align-items: center; }
+        .navbar a { color: white; text-decoration: none; margin-left: 20px; }
+        .container { max-width: 900px; margin: 30px auto; padding: 0 20px; }
+        .card { background: white; padding: 25px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+        table { width: 100%; border-collapse: collapse; }
+        th { background: #2c3e50; color: white; padding: 12px; }
+        td { padding: 12px; border-bottom: 1px solid #eee; text-align: center; }
+        tr:hover { background: #f9f9f9; }
+        .delete-btn { background: #e74c3c; color: white; border: none; padding: 6px 14px; border-radius: 5px; cursor: pointer; }
+        .delete-btn:hover { background: #c0392b; }
+        h2 { color: #2c3e50; }
+    </style>
+</head>
+<body>
+
+<div class="navbar">
+    <span>📋 Bill History</span>
+    <div>
+        <a href="/">🧾 Scan Bill</a>
+        <a href="/dashboard">📊 Dashboard</a>
+    </div>
+</div>
+
+<div class="container">
+    <div class="card">
+        <h2>All Scanned Receipts</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>#</th>
+                    <th>🏪 Store</th>
+                    <th>📅 Date</th>
+                    <th>💰 Total</th>
+                    <th>🕐 Scanned At</th>
+                    <th>Action</th>
+                </tr>
+            </thead>
+            <tbody id="historyTable"></tbody>
+        </table>
+    </div>
+</div>
+
+<script>
+async function loadHistory() {
+    const res = await fetch('/api/receipts');
+    const receipts = await res.json();
+    const tbody = document.getElementById('historyTable');
+    tbody.innerHTML = '';
+
+    if (receipts.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6">No receipts scanned yet!</td></tr>';
+        return;
+    }
+
+    receipts.forEach((r, i) => {
+        tbody.innerHTML += `<tr>
+            <td>${i+1}</td>
+            <td>${r.store_name || 'Unknown'}</td>
+            <td>${r.date || '-'}</td>
+            <td>$${r.total ? r.total.toFixed(2) : '0.00'}</td>
+            <td>${r.scanned_at}</td>
+            <td><button class="delete-btn" onclick="deleteReceipt(${r.id})">🗑️ Delete</button></td>
+        </tr>`;
+    });
+}
+
+async function deleteReceipt(id) {
+    if (!confirm('Delete this receipt?')) return;
+    await fetch('/api/delete/' + id, { method: 'DELETE' });
+    loadHistory();
+}
+
+loadHistory();
+</script>
+</body>
+</html>

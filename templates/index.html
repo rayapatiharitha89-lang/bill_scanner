@@ -1,0 +1,419 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Bill Scanner</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: Arial, sans-serif; background: #f0f2f5; }
+
+        .navbar {
+            background: #2c3e50;
+            color: white;
+            padding: 15px 30px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .navbar a { color: white; text-decoration: none; margin-left: 20px; }
+
+        .container { max-width: 1100px; margin: 30px auto; padding: 0 20px; }
+
+        .grid-top { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px; }
+
+        .card {
+            background: white;
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        .card h3 { color: #2c3e50; margin-bottom: 15px; border-bottom: 2px solid #eee; padding-bottom: 8px; }
+
+        .drop-zone {
+            border: 3px dashed #4CAF50;
+            border-radius: 10px;
+            padding: 30px;
+            text-align: center;
+            cursor: pointer;
+            background: #f0fff0;
+            transition: background 0.3s;
+        }
+        .drop-zone:hover { background: #d0f0d0; }
+        .drop-zone .icon { font-size: 40px; }
+        .drop-zone p { color: #555; margin-top: 8px; }
+
+        #preview { max-width: 100%; margin-top: 10px; border-radius: 8px; display: none; max-height: 200px; object-fit: contain; }
+
+        button {
+            padding: 12px 20px;
+            margin: 5px;
+            background: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 15px;
+            width: 100%;
+            margin-top: 10px;
+        }
+        button:hover { opacity: 0.9; }
+
+        .status { margin-top: 8px; font-weight: bold; color: #2196F3; font-size: 14px; }
+
+        /* Parsed result */
+        .info-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-bottom: 15px; }
+        .info-box { background: #f8f9fa; padding: 12px; border-radius: 8px; text-align: center; }
+        .info-box .label { font-size: 12px; color: #777; }
+        .info-box .value { font-size: 18px; font-weight: bold; color: #2c3e50; margin-top: 4px; }
+        .info-box .value.total { color: #27ae60; font-size: 22px; }
+
+        table { width: 100%; border-collapse: collapse; font-size: 13px; }
+        th { background: #2c3e50; color: white; padding: 8px; }
+        td { padding: 8px; border-bottom: 1px solid #eee; text-align: center; }
+        tr:hover { background: #f5f5f5; }
+
+        /* Stats row */
+        .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; margin-bottom: 20px; }
+        .stat-card { background: white; padding: 20px; border-radius: 12px; text-align: center; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+        .stat-card h2 { font-size: 28px; color: #27ae60; }
+        .stat-card p { color: #777; font-size: 13px; margin-top: 4px; }
+
+        /* Charts */
+        .charts-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px; }
+
+        /* History table */
+        .delete-btn { background: #e74c3c; color: white; border: none; padding: 5px 10px; border-radius: 5px; cursor: pointer; width: auto; margin: 0; }
+
+        video { width: 100%; border-radius: 8px; margin-top: 10px; }
+
+        @media (max-width: 768px) {
+            .grid-top, .charts-grid, .stats { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="navbar">
+    <span>🧾 Bill Scanner & Dashboard</span>
+</div>
+
+<div class="container">
+
+    <!-- TOP: Upload + Result side by side -->
+    <div class="grid-top">
+
+        <!-- Upload Card -->
+        <div class="card">
+            <h3>📁 Upload Receipt</h3>
+            <div class="drop-zone" id="dropZone" onclick="document.getElementById('billFile').click()">
+                <div class="icon">📄</div>
+                <p>Drag & Drop or <strong>click to choose</strong></p>
+                <p style="font-size:12px;color:#999">Any receipt — JPG, PNG</p>
+            </div>
+            <input type="file" id="billFile" accept="image/*" style="display:none">
+            <img id="preview" src="" alt="Preview">
+            <div class="status" id="status">No file selected</div>
+            <button onclick="scanFile()">🔍 Scan Bill</button>
+
+            <!-- Camera -->
+            <button id="startBtn" onclick="startCamera()" style="background:#2196F3">📷 Open Camera</button>
+            <button id="captureBtn" onclick="capturePhoto()" style="display:none; background:#9b59b6">📸 Capture</button>
+            <button id="stopBtn" onclick="stopCamera()" style="display:none; background:#e74c3c">⏹ Stop Camera</button>
+            <video id="video" autoplay style="display:none"></video>
+            <canvas id="canvas" style="display:none"></canvas>
+        </div>
+
+        <!-- Parsed Result Card -->
+        <div class="card">
+            <h3>📊 Scanned Bill Details</h3>
+            <div class="info-grid">
+                <div class="info-box">
+                    <div class="label">🏪 Store</div>
+                    <div class="value" id="storeName">-</div>
+                </div>
+                <div class="info-box">
+                    <div class="label">📅 Date</div>
+                    <div class="value" id="date">-</div>
+                </div>
+                <div class="info-box">
+                    <div class="label">💰 Total</div>
+                    <div class="value total" id="total">-</div>
+                </div>
+            </div>
+            <h4 style="margin-bottom:8px; color:#555;">🛒 Items</h4>
+            <div style="max-height:250px; overflow-y:auto;">
+                <table>
+                    <thead><tr><th>Qty</th><th>Item</th><th>Price</th></tr></thead>
+                    <tbody id="itemsTable"><tr><td colspan="3">Scan a receipt to see items</td></tr></tbody>
+                </table>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- STATS ROW -->
+    <div class="stats">
+        <div class="stat-card">
+            <h2 id="totalSpent">$0</h2>
+            <p>💰 Total Spent (All Receipts)</p>
+        </div>
+        <div class="stat-card">
+            <h2 id="totalReceipts">0</h2>
+            <p>🧾 Receipts Scanned</p>
+        </div>
+        <div class="stat-card">
+            <h2 id="avgSpent">$0</h2>
+            <p>📊 Average Per Receipt</p>
+        </div>
+    </div>
+
+    <!-- CHARTS ROW -->
+    <div class="charts-grid">
+        <!-- Line Chart -->
+        <div class="card">
+            <h3>📈 Spending Over Time</h3>
+            <canvas id="lineChart"></canvas>
+        </div>
+        <!-- Bar Chart -->
+        <div class="card">
+            <h3>🏪 Spending by Store</h3>
+            <canvas id="barChart"></canvas>
+        </div>
+    </div>
+
+    <!-- TOP ITEMS + HISTORY -->
+    <div class="charts-grid">
+        <!-- Top Items -->
+        <div class="card">
+            <h3>🏆 Top 10 Items</h3>
+            <table>
+                <thead><tr><th>#</th><th>Item</th><th>Total</th></tr></thead>
+                <tbody id="topItems"></tbody>
+            </table>
+        </div>
+        <!-- History -->
+        <div class="card">
+            <h3>📋 Receipt History</h3>
+            <div style="max-height:300px; overflow-y:auto;">
+                <table>
+                    <thead><tr><th>Store</th><th>Date</th><th>Total</th><th>Del</th></tr></thead>
+                    <tbody id="historyTable"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<script>
+let stream = null;
+let selectedFile = null;
+let lineChartInstance = null;
+let barChartInstance = null;
+
+// File input
+document.getElementById('billFile').addEventListener('change', e => handleFile(e.target.files[0]));
+
+// Drag & Drop
+const dropZone = document.getElementById('dropZone');
+dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.style.background = '#d0f0d0'; });
+dropZone.addEventListener('dragleave', () => { dropZone.style.background = '#f0fff0'; });
+dropZone.addEventListener('drop', e => {
+    e.preventDefault();
+    dropZone.style.background = '#f0fff0';
+    handleFile(e.dataTransfer.files[0]);
+});
+
+function handleFile(file) {
+    if (!file) return;
+    selectedFile = file;
+    document.getElementById('status').textContent = '✅ ' + file.name;
+    const reader = new FileReader();
+    reader.onload = e => {
+        const preview = document.getElementById('preview');
+        preview.src = e.target.result;
+        preview.style.display = 'block';
+    };
+    reader.readAsDataURL(file);
+}
+
+async function scanFile() {
+    if (!selectedFile) { alert('Please choose a file!'); return; }
+    const formData = new FormData();
+    formData.append('bill', selectedFile);
+    document.getElementById('status').textContent = '⏳ Scanning...';
+    const response = await fetch('/scan', { method: 'POST', body: formData });
+    const data = await response.json();
+    console.log('Response:', data);
+    if (data.error) {
+        document.getElementById('status').textContent = '❌ Error: ' + data.error;
+        return;
+    }
+    if (data.parsed) {
+        displayParsed(data.parsed);
+    if (data.saved) {
+            document.getElementById('status').textContent = '✅ Saved to database!';
+        } else if (data.message === 'duplicate') {
+            document.getElementById('status').textContent = '⚠️ Already scanned! Not added again.';
+        }
+    }
+    loadDashboard();
+}
+
+function displayParsed(parsed) {
+    document.getElementById('storeName').textContent = parsed.store_name || '-';
+    document.getElementById('date').textContent = parsed.date || '-';
+    document.getElementById('total').textContent = parsed.total ? '$' + parsed.total : '-';
+    const tbody = document.getElementById('itemsTable');
+    tbody.innerHTML = '';
+    if (!parsed.items || parsed.items.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="3">No items detected</td></tr>';
+    } else {
+        parsed.items.forEach(item => {
+            tbody.innerHTML += `<tr>
+                <td>${item.quantity}</td>
+                <td>${item.name}</td>
+                <td>$${item.price}</td>
+            </tr>`;
+        });
+    }
+}
+
+async function loadDashboard() {
+    const res = await fetch('/api/dashboard');
+    const data = await res.json();
+
+    // Stats
+    const totalSpent = data.line_data.reduce((s, r) => s + r.total, 0);
+    const count = data.line_data.length;
+    document.getElementById('totalSpent').textContent = '$' + totalSpent.toFixed(2);
+    document.getElementById('totalReceipts').textContent = count;
+    document.getElementById('avgSpent').textContent = count ? '$' + (totalSpent/count).toFixed(2) : '$0';
+
+    // Line Chart
+    if (lineChartInstance) lineChartInstance.destroy();
+    lineChartInstance = new Chart(document.getElementById('lineChart'), {
+        type: 'line',
+        data: {
+            labels: data.line_data.map(r => r.store + '\n' + r.date),
+            datasets: [{
+                label: 'Amount Spent ($)',
+                data: data.line_data.map(r => r.total),
+                borderColor: '#27ae60',
+                backgroundColor: 'rgba(39,174,96,0.15)',
+                borderWidth: 3,
+                pointBackgroundColor: '#27ae60',
+                pointRadius: 7,
+                fill: true,
+                tension: 0.4
+            }]
+        },
+        options: {
+            responsive: true,
+            scales: { y: { beginAtZero: true, ticks: { callback: v => '$' + v } } }
+        }
+    });
+
+    // Bar Chart
+    if (barChartInstance) barChartInstance.destroy();
+    const stores = Object.keys(data.store_totals);
+    const colors = ['#3498db','#e74c3c','#f39c12','#9b59b6','#1abc9c'];
+    barChartInstance = new Chart(document.getElementById('barChart'), {
+        type: 'bar',
+        data: {
+            labels: stores,
+            datasets: [{
+                label: 'Total ($)',
+                data: Object.values(data.store_totals),
+                backgroundColor: colors.slice(0, stores.length),
+                borderRadius: 8
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: { legend: { display: false } },
+            scales: { y: { beginAtZero: true, ticks: { callback: v => '$' + v } } }
+        }
+    });
+
+    // Top Items
+    const topTbody = document.getElementById('topItems');
+    topTbody.innerHTML = '';
+    data.top_items.forEach((item, i) => {
+        topTbody.innerHTML += `<tr>
+            <td>${i+1}</td>
+            <td>${item.name}</td>
+            <td>$${item.total.toFixed(2)}</td>
+        </tr>`;
+    });
+
+    // History
+    loadHistory();
+}
+
+async function loadHistory() {
+    const res = await fetch('/api/receipts');
+    const receipts = await res.json();
+    const tbody = document.getElementById('historyTable');
+    tbody.innerHTML = '';
+    if (receipts.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="4">No receipts yet!</td></tr>';
+        return;
+    }
+    receipts.forEach(r => {
+        tbody.innerHTML += `<tr>
+            <td>${r.store_name || '-'}</td>
+            <td>${r.date || '-'}</td>
+            <td>$${r.total ? r.total.toFixed(2) : '0.00'}</td>
+            <td><button class="delete-btn" onclick="deleteReceipt(${r.id})">🗑️</button></td>
+        </tr>`;
+    });
+}
+
+async function deleteReceipt(id) {
+    if (!confirm('Delete this receipt?')) return;
+    await fetch('/api/delete/' + id, { method: 'DELETE' });
+    loadDashboard();
+}
+
+// Camera
+async function startCamera() {
+    stream = await navigator.mediaDevices.getUserMedia({ video: true });
+    document.getElementById('video').srcObject = stream;
+    document.getElementById('video').style.display = 'block';
+    document.getElementById('captureBtn').style.display = 'block';
+    document.getElementById('stopBtn').style.display = 'block';
+    document.getElementById('startBtn').style.display = 'none';
+}
+
+async function capturePhoto() {
+    const video = document.getElementById('video');
+    const canvas = document.getElementById('canvas');
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    canvas.getContext('2d').drawImage(video, 0, 0);
+    canvas.toBlob(async blob => {
+        const formData = new FormData();
+        formData.append('bill', blob, 'capture.jpg');
+        document.getElementById('status').textContent = '⏳ Scanning...';
+        const response = await fetch('/scan', { method: 'POST', body: formData });
+        const data = await response.json();
+        if (data.parsed) displayParsed(data.parsed);
+        loadDashboard();
+    }, 'image/jpeg');
+}
+
+function stopCamera() {
+    if (stream) stream.getTracks().forEach(t => t.stop());
+    document.getElementById('video').style.display = 'none';
+    document.getElementById('captureBtn').style.display = 'none';
+    document.getElementById('stopBtn').style.display = 'none';
+    document.getElementById('startBtn').style.display = 'block';
+}
+
+// Load dashboard on page open
+loadDashboard();
+</script>
+</body>
+</html>

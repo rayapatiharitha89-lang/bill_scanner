@@ -1,0 +1,13 @@
+venv/
+__pycache__/
+instance/
+uploads/
+*.pyc
+*.db
+.env
+test_ocr.py
+create_test.py
+output_clean.txt
+output_test.txt
+*.jpg
+*.png
