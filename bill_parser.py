@@ -1,26 +1,22 @@
 import re
 
 def clean_store_name(name):
-    # Remove special characters and symbols
     name = re.sub(r'[^a-zA-Z0-9\s&]', '', name)
-    # Remove extra spaces
     name = re.sub(r'\s+', ' ', name).strip()
-    # Capitalize properly
     name = name.title()
 
-    # Known corrections
     corrections = {
-    'Almart': 'Walmart',
-    'Aldi': 'ALDI',
-    'Costco Wholesale': 'Costco',
-    'Mee': 'Costco',        # ← add this
-    'C0stco': 'Costco',     # ← add this
-    'Csstco': 'Costco',     # ← add this
-}
+        'Almart': 'Walmart',
+        'Walmart': 'Walmart',
+        'Aldi': 'ALDI',
+        'Costco Wholesale': 'Costco',
+        'Costco': 'Costco',
+        'Mee': 'Costco',
+        'Berghotel': 'Berghotel',
+    }
     for wrong, correct in corrections.items():
         if wrong.lower() in name.lower():
             return correct
-
     return name
 
 def parse_bill(text):
@@ -34,7 +30,7 @@ def parse_bill(text):
     lines = text.strip().split('\n')
     lines = [l.strip() for l in lines if l.strip()]
 
-    # Store name - find first meaningful line
+    # Store name
     for line in lines:
         clean = re.sub(r'[^a-zA-Z\s]', '', line).strip()
         if len(clean) >= 3:
@@ -49,8 +45,8 @@ def parse_bill(text):
             result['date'] = match.group(1)
             break
 
-    # Total pattern
-    total_pattern = r'(?i)(total|tot|amount due|subtotal|sum|gesamt|CHF|Tout|Total\s*:)[^\d]*(\d+[.,]\d{2})'
+    # Total pattern - improved
+    total_pattern = r'(?i)(total|tot|amount due|subtotal|sum|gesamt|CHF|Tout|Grand Total)[^\d]*(\d+[.,]\d{2})'
     for line in lines:
         match = re.search(total_pattern, line.strip())
         if match:

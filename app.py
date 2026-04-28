@@ -19,6 +19,8 @@ with app.app_context():
     db.create_all()
 
 def preprocess_image(image):
+    if image.mode in ('RGBA', 'LA', 'P'):
+        image = image.convert('RGB')
     width, height = image.size
     image = image.resize((width * 2, height * 2), Image.LANCZOS)
     image = image.convert('L')
