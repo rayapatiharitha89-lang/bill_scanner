@@ -1,5 +1,5 @@
 flask
 flask-sqlalchemy
-pytesseract
 pillow
 gunicorn
+pytesseract

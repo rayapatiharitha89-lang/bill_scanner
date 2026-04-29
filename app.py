@@ -13,7 +13,12 @@ app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///bills.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 db.init_app(app)
-pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
+import shutil
+tesseract_path = shutil.which('tesseract')
+if tesseract_path:
+    pytesseract.pytesseract.tesseract_cmd = tesseract_path
+else:
+    pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
 
 with app.app_context():
     db.create_all()
