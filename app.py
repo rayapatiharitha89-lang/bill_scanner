@@ -1,5 +1,6 @@
 from flask import Flask, request, jsonify, render_template
-import easyocr
+import pytesseract
+from PIL import Image, ImageEnhance, ImageFilter
 import os
 import uuid
 from bill_parser import parse_bill
@@ -12,10 +13,24 @@ app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///bills.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 db.init_app(app)
-reader = easyocr.Reader(['en'], gpu=False)
+
+# Auto-detect tesseract path
+pytesseract.pytesseract.tesseract_cmd = 'tesseract'
 
 with app.app_context():
     db.create_all()
+
+def preprocess_image(image):
+    if image.mode in ('RGBA', 'LA', 'P'):
+        image = image.convert('RGB')
+    width, height = image.size
+    image = image.resize((width * 2, height * 2), Image.LANCZOS)
+    image = image.convert('L')
+    image = image.filter(ImageFilter.SHARPEN)
+    image = image.filter(ImageFilter.SHARPEN)
+    enhancer = ImageEnhance.Contrast(image)
+    image = enhancer.enhance(3.0)
+    return image
 
 @app.route('/')
 def index():
@@ -36,9 +51,11 @@ def scan_bill():
     file.save(filepath)
 
     try:
-        results = reader.readtext(filepath)
-        extracted_text = '\n'.join([text for _, text, conf in results if conf > 0.3])
-        print(f"✅ EasyOCR extracted: {extracted_text[:100]}")
+        image = Image.open(filepath)
+        processed = preprocess_image(image)
+        config = '--oem 3 --psm 6 -l eng'
+        extracted_text = pytesseract.image_to_string(processed, config=config)
+        print(f"✅ OCR extracted: {extracted_text[:100]}")
     except Exception as e:
         print(f"❌ OCR ERROR: {str(e)}")
         return jsonify({'error': str(e)}), 500
@@ -53,7 +70,6 @@ def scan_bill():
     except:
         total_val = 0.0
 
-    # Duplicate check
     existing = Receipt.query.filter_by(
         store_name=parsed['store_name'],
         total=total_val
@@ -67,7 +83,6 @@ def scan_bill():
             'message': 'duplicate'
         })
 
-    # Save to database
     receipt = Receipt(
         store_name=parsed['store_name'],
         date=parsed['date'],
@@ -113,7 +128,6 @@ def api_receipts():
 @app.route('/api/dashboard')
 def api_dashboard():
     receipts = Receipt.query.order_by(Receipt.scanned_at.asc()).all()
-
     line_data = [{
         'date': r.scanned_at.strftime('%d/%m/%Y %H:%M'),
         'total': r.total,

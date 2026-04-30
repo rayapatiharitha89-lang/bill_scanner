@@ -2,4 +2,4 @@ flask
 flask-sqlalchemy
 pillow
 gunicorn
-easyocr
+pytesseract
