@@ -1,5 +1,6 @@
 flask
-flask-sqlalchemy
+easyocr
+numpy
 pillow
-gunicorn
-requests
+opencv-python-headless
+torch
