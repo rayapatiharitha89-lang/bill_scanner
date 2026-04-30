@@ -1,5 +1,7 @@
 flask
-flask-sqlalchemy
+python-bidi==0.4.2
 pillow
-gunicorn
+opencv-python-headless
 pytesseract
+numpy
+easyocr
