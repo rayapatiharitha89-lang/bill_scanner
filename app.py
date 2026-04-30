@@ -1,6 +1,5 @@
 from flask import Flask, request, jsonify, render_template
-import pytesseract
-from PIL import Image, ImageEnhance, ImageFilter
+import easyocr
 import os
 import uuid
 from bill_parser import parse_bill
@@ -13,27 +12,10 @@ app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///bills.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 db.init_app(app)
-import shutil
-tesseract_path = shutil.which('tesseract')
-if tesseract_path:
-    pytesseract.pytesseract.tesseract_cmd = tesseract_path
-else:
-    pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
+reader = easyocr.Reader(['en'], gpu=False)
 
 with app.app_context():
     db.create_all()
-
-def preprocess_image(image):
-    if image.mode in ('RGBA', 'LA', 'P'):
-        image = image.convert('RGB')
-    width, height = image.size
-    image = image.resize((width * 2, height * 2), Image.LANCZOS)
-    image = image.convert('L')
-    image = image.filter(ImageFilter.SHARPEN)
-    image = image.filter(ImageFilter.SHARPEN)
-    enhancer = ImageEnhance.Contrast(image)
-    image = enhancer.enhance(3.0)
-    return image
 
 @app.route('/')
 def index():
@@ -53,11 +35,13 @@ def scan_bill():
     filepath = os.path.join(app.config['UPLOAD_FOLDER'], unique_filename)
     file.save(filepath)
 
-    # Tesseract OCR
-    image = Image.open(filepath)
-    processed = preprocess_image(image)
-    config = '--oem 3 --psm 6 -l eng'
-    extracted_text = pytesseract.image_to_string(processed, config=config)
+    try:
+        results = reader.readtext(filepath)
+        extracted_text = '\n'.join([text for _, text, conf in results if conf > 0.3])
+        print(f"✅ EasyOCR extracted: {extracted_text[:100]}")
+    except Exception as e:
+        print(f"❌ OCR ERROR: {str(e)}")
+        return jsonify({'error': str(e)}), 500
 
     if not extracted_text.strip():
         return jsonify({'extracted_text': 'No text found!'})
@@ -163,4 +147,4 @@ def delete_receipt(receipt_id):
     return jsonify({'deleted': True})
 
 if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0')
+    app.run(debug=False, host='0.0.0.0')
