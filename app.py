@@ -1,6 +1,5 @@
 from flask import Flask, request, jsonify, render_template
-import pytesseract
-from PIL import Image, ImageEnhance, ImageFilter
+import requests
 import os
 import uuid
 from bill_parser import parse_bill
@@ -14,23 +13,27 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 db.init_app(app)
 
-# Auto-detect tesseract path
-pytesseract.pytesseract.tesseract_cmd = 'tesseract'
+# OCR.space free API key
+OCR_API_KEY = 'K89240110188957'
 
 with app.app_context():
     db.create_all()
 
-def preprocess_image(image):
-    if image.mode in ('RGBA', 'LA', 'P'):
-        image = image.convert('RGB')
-    width, height = image.size
-    image = image.resize((width * 2, height * 2), Image.LANCZOS)
-    image = image.convert('L')
-    image = image.filter(ImageFilter.SHARPEN)
-    image = image.filter(ImageFilter.SHARPEN)
-    enhancer = ImageEnhance.Contrast(image)
-    image = enhancer.enhance(3.0)
-    return image
+def extract_text_ocr_space(image_path):
+    with open(image_path, 'rb') as f:
+        response = requests.post(
+            'https://api.ocr.space/parse/image',
+            files={'file': f},
+            data={
+                'apikey': OCR_API_KEY,
+                'language': 'eng',
+                'isOverlayRequired': False
+            }
+        )
+    result = response.json()
+    if result.get('ParsedResults'):
+        return result['ParsedResults'][0]['ParsedText']
+    return ''
 
 @app.route('/')
 def index():
@@ -51,10 +54,7 @@ def scan_bill():
     file.save(filepath)
 
     try:
-        image = Image.open(filepath)
-        processed = preprocess_image(image)
-        config = '--oem 3 --psm 6 -l eng'
-        extracted_text = pytesseract.image_to_string(processed, config=config)
+        extracted_text = extract_text_ocr_space(filepath)
         print(f"✅ OCR extracted: {extracted_text[:100]}")
     except Exception as e:
         print(f"❌ OCR ERROR: {str(e)}")
@@ -142,9 +142,11 @@ def api_dashboard():
     all_items = ReceiptItem.query.all()
     item_totals = {}
     for item in all_items:
-        item_totals[item.name] = round(item_totals.get(item.name, 0) + item.price, 2)
+        item_totals[item.name] = round(
+            item_totals.get(item.name, 0) + item.price, 2)
 
-    top_items = sorted(item_totals.items(), key=lambda x: x[1], reverse=True)[:10]
+    top_items = sorted(
+        item_totals.items(), key=lambda x: x[1], reverse=True)[:10]
 
     return jsonify({
         'line_data': line_data,
