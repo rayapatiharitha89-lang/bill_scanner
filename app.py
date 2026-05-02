@@ -3,6 +3,7 @@ import pytesseract
 from PIL import Image, ImageEnhance, ImageFilter
 import os
 import uuid
+import requests
 from bill_parser import parse_bill
 from database import db, Receipt, ReceiptItem
 
@@ -12,22 +13,48 @@ app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///bills.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db.init_app(app)
-pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
 
 with app.app_context():
     db.create_all()
 
-def preprocess_image(image):
-    if image.mode in ('RGBA', 'LA', 'P'):
-        image = image.convert('RGB')
-    width, height = image.size
-    image = image.resize((width * 2, height * 2), Image.LANCZOS)
-    image = image.convert('L')
-    image = image.filter(ImageFilter.SHARPEN)
-    image = image.filter(ImageFilter.SHARPEN)
-    enhancer = ImageEnhance.Contrast(image)
-    image = enhancer.enhance(3.0)
-    return image
+def extract_text(filepath):
+    # Try Tesseract first (works on laptop)
+    try:
+        if os.path.exists(r'C:\Program Files\Tesseract-OCR\tesseract.exe'):
+            pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
+        from PIL import Image as PILImage
+        import io
+        with open(filepath, 'rb') as img_file:
+          image = PILImage.open(io.BytesIO(img_file.read())).convert('RGB') 
+        width, height = image.size
+        image = image.resize((width * 2, height * 2), Image.LANCZOS)
+        image = image.convert('L')
+        enhancer = ImageEnhance.Contrast(image)
+        image = enhancer.enhance(3.0)
+        text = pytesseract.image_to_string(image, config='--oem 3 --psm 6')
+        if text.strip():
+            print("✅ Tesseract worked!")
+            return text
+    except Exception as e:
+        print(f"Tesseract failed: {e}")
+
+    # Fallback to OCR.space (works on Render)
+    try:
+        with open(filepath, 'rb') as f:
+            response = requests.post(
+                'https://api.ocr.space/parse/image',
+                files={'file': f},
+                data={'apikey': 'helloworld', 'language': 'eng'}
+            )
+        result = response.json()
+        if result.get('ParsedResults'):
+            text = result['ParsedResults'][0]['ParsedText']
+            print("✅ OCR.space worked!")
+            return text
+    except Exception as e:
+        print(f"OCR.space failed: {e}")
+
+    return ''
 
 @app.route('/')
 def index():
@@ -44,21 +71,17 @@ def scan_bill():
     unique_filename = str(uuid.uuid4()) + ext
     filepath = os.path.join(app.config['UPLOAD_FOLDER'], unique_filename)
     file.save(filepath)
-    try:
-        from PIL import Image as PILImage
-        image = PILImage.open(filepath).convert('RGB')
-        processed = preprocess_image(image)
-        config = '--oem 3 --psm 6 -l eng'
-        extracted_text = pytesseract.image_to_string(processed, config=config)
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-    if not extracted_text.strip():
-        return jsonify({'extracted_text': 'No text found!'})
+
+    extracted_text = extract_text(filepath)
+    if not extracted_text:
+        return jsonify({'error': 'Could not read image!'}), 500
+
     parsed = parse_bill(extracted_text)
     try:
         total_val = float(parsed['total'].replace(',', '.')) if parsed['total'] else 0.0
     except:
         total_val = 0.0
+
     existing = Receipt.query.filter_by(
         store_name=parsed['store_name'],
         total=total_val
@@ -70,6 +93,7 @@ def scan_bill():
             'saved': False,
             'message': 'duplicate'
         })
+
     receipt = Receipt(
         store_name=parsed['store_name'],
         date=parsed['date'],
@@ -78,6 +102,7 @@ def scan_bill():
     )
     db.session.add(receipt)
     db.session.flush()
+
     for item in parsed['items']:
         try:
             price_val = float(item['price'].replace(',', '.'))
@@ -90,6 +115,7 @@ def scan_bill():
             price=price_val
         )
         db.session.add(ri)
+
     db.session.commit()
     return jsonify({
         'extracted_text': extracted_text,
