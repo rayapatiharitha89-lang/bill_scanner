@@ -1,6 +1,5 @@
 flask
-easyocr
-numpy
+flask-sqlalchemy
 pillow
-opencv-python-headless
-torch
+gunicorn
+pytesseract

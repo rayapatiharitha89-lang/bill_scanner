@@ -11,7 +11,6 @@ UPLOAD_FOLDER = 'uploads'
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///bills.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-
 db.init_app(app)
 pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
 
@@ -124,8 +123,10 @@ def api_dashboard():
     all_items = ReceiptItem.query.all()
     item_totals = {}
     for item in all_items:
-        item_totals[item.name] = round(item_totals.get(item.name, 0) + item.price, 2)
-    top_items = sorted(item_totals.items(), key=lambda x: x[1], reverse=True)[:10]
+        item_totals[item.name] = round(
+            item_totals.get(item.name, 0) + item.price, 2)
+    top_items = sorted(
+        item_totals.items(), key=lambda x: x[1], reverse=True)[:10]
     return jsonify({
         'line_data': line_data,
         'store_totals': store_totals,
