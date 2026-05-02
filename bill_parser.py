@@ -28,14 +28,12 @@ def parse_bill(text):
     lines = text.strip().split('\n')
     lines = [l.strip() for l in lines if l.strip()]
 
-    # Store name
     for line in lines:
         clean = re.sub(r'[^a-zA-Z\s]', '', line).strip()
         if len(clean) >= 3:
             result['store_name'] = clean_store_name(line.strip())
             break
 
-    # Date pattern
     date_pattern = r'\b(\d{1,2}[./]\d{1,2}[./]\d{2,4})\b'
     for line in lines:
         match = re.search(date_pattern, line)
@@ -43,14 +41,13 @@ def parse_bill(text):
             result['date'] = match.group(1)
             break
 
-    total_pattern = r'(?i)(total|tot|amount due|subtotal|sum|gesamt|CHF|Tout|TOTAL\s*:?)\s*\$?\s*(\d+[.,]\d{2})'
+    total_pattern = r'(?i)(total|tot|amount due|subtotal|sum|gesamt|CHF|Tout|TOTAL)\s*\$?\s*(\d+[.,]\d{2})'
     for line in lines:
         match = re.search(total_pattern, line.strip())
         if match:
             result['total'] = match.group(2)
             break
 
-    # Items
     skip_words = ['total', 'subtotal', 'amount', 'cash', 'change',
                   'tax', 'items', 'debit', 'visa', 'approval',
                   'terminal', 'validation', 'payment', 'thank',
