@@ -43,8 +43,7 @@ def parse_bill(text):
             result['date'] = match.group(1)
             break
 
-    # Total pattern - improved
-    total_pattern = r'(?i)(total|tot|amount due|subtotal|sum|gesamt|CHF|Tout|TOTAL)[^\d]*(\d+[.,]\d{2})'
+    total_pattern = r'(?i)(total|tot|amount due|subtotal|sum|gesamt|CHF|Tout|TOTAL\s*:?)\s*\$?\s*(\d+[.,]\d{2})'
     for line in lines:
         match = re.search(total_pattern, line.strip())
         if match:
