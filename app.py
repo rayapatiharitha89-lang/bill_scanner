@@ -45,7 +45,8 @@ def scan_bill():
     filepath = os.path.join(app.config['UPLOAD_FOLDER'], unique_filename)
     file.save(filepath)
     try:
-        image = Image.open(filepath)
+        from PIL import Image as PILImage
+        image = PILImage.open(filepath).convert('RGB')
         processed = preprocess_image(image)
         config = '--oem 3 --psm 6 -l eng'
         extracted_text = pytesseract.image_to_string(processed, config=config)
